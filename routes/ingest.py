@@ -3,21 +3,36 @@ from models.doument import Document
 from models import db
 from werkzeug.utils import secure_filename
 from config import Constants
-import os
+import os,asyncio
+import numpy as np
+from transformers import pipeline
+
 
 ingest_blueprint = Blueprint('ingest',__name__)
 UPLOAD_FOLDER = Constants.UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok = True)
 
+#Initialize embedding pipeline
+embedding_pipeline = pipeline("feature-extraction", model = 'sentence-transformers/all-MiniLM-L6-v2')
+
+
+def flatten_with_numpy(embedding):
+    """Flatten a multidimensional embedding list using numpy."""
+    return np.array(embedding).flatten().tolist()
+
+
+async def generate_embedding_async(content):
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None,embedding_pipeline,content)
 
 
 @ingest_blueprint.route('/test',methods = ['GET'])
 def test_db_connection():
     documents = Document.query.all()
-    return jsonify([{"id":doc.id,"title":doc.title,"content":doc.file_path} for doc in documents])
+    return jsonify([{"id":doc.id,"title":doc.title,"content":doc.content} for doc in documents])
 
 @ingest_blueprint.route('/', methods = ['POST'])
-def ingest_document():
+async def ingest_document():
     try:
         if 'file' not in request.files:
             abort(400)
@@ -33,10 +48,21 @@ def ingest_document():
         filename = secure_filename(file.filename)
         file_path = os.path.join(UPLOAD_FOLDER,filename)
         file.save(file_path)
+        content = ''
+        with open(file_path,'r') as file:
+            content = file.read()
+        
+        embeddings = await generate_embedding_async(content)
+        embeddings = list(flatten_with_numpy(embeddings))[:1536]
+        
+        
 
-        new_document = Document(title=title,file_path=file_path)
-        db.session.add(new_document)
-        db.session.commit()
+        new_document = Document(title=title,file_path=file_path,content=content,embeddings=embeddings)
+        try:
+            db.session.add(new_document)
+            db.session.commit()
+        except Exception as e:
+            print(e)
 
         return jsonify({
             "message":"Document successfully ingested",

@@ -11,9 +11,9 @@ def create_app():
     db.init_app(app)
     CORS(app)
     from routes.ingest import ingest_blueprint
-    # from routes.qa import qa_blueprint
+    from routes.qa import qa_blueprint
     app.register_blueprint(ingest_blueprint,url_prefix = '/api/ingest')
-    # app.register_blueprint(qa_blueprint,url_prefix = '/api/qa')
+    app.register_blueprint(qa_blueprint,url_prefix = '/api/qa')
     return app
 
 if __name__=='__main__':
