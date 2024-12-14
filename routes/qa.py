@@ -17,13 +17,13 @@ import pandas as pd
 qa_blueprint = Blueprint('qa',__name__)
 embedding_pipeline = pipeline("feature-extraction", model = 'sentence-transformers/all-MiniLM-L6-v2')
 
-from scipy.spatial.distance import cosine
+# from scipy.spatial.distance import cosine
 
 
-# Cosine distance
-cosine_distance = cosine(vec1, vec2)
+# # Cosine distance
+# cosine_distance = cosine(vec1, vec2)
 
-print(f"Cosine Distance: {cosine_distance}")
+# print(f"Cosine Distance: {cosine_distance}")
 
 
 
@@ -36,6 +36,32 @@ def flatten_with_numpy(embedding):
 async def generate_embedding_async(content):
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None,embedding_pipeline,content)
+
+
+def find_similar_documents(question_embedding, top_k=5):
+    """
+    Retrieve the top-k most similar documents using the db object.
+    """
+    # Perform the query
+    query = (
+    db.session.query(
+        Document.id,
+        Document.title,
+        Document.content,
+        (Document.embeddings.op('<->')(question_embedding)).label("similarity")
+    )
+    .order_by("similarity")  # Order by similarity (distance)
+    .limit(top_k)  # Limit to top-k results
+)
+    
+    # Fetch results
+    results = query.all()
+
+    # Convert results to a list of dictionaries
+    return [
+        {"id": row.id, "name": row.name, "content": row.content, "similarity": row.similarity}
+        for row in results
+    ]
 
 
 @qa_blueprint.route('/question', methods = ['POST','GET'])
@@ -58,16 +84,17 @@ async def qa():
         except Exception as e:
             print(e)
 
-        documents = Document.query.all()
+        return find_similar_documents(question, top_k=5)
+        # documents = Document.query.all()
         
-        for row in documents:
-            Vector(row.embeddings).comparator_factory.cosine_distance(Vector(question.embedding))
+        # for row in documents:
+        #     Vector(row.embeddings).comparator_factory.cosine_distance(Vector(question.embedding))
 
         
-        return [
-            {"id": row.id, "name": row.title, "content": row.content}#documnets
-            for row in documents
-        ]
+        # return [
+        #     {"id": row.id, "name": row.title, "content": row.content}#documnets
+        #     for row in documents
+        # ]
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

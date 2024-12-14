@@ -29,14 +29,18 @@ async def generate_embedding_async(content):
 @ingest_blueprint.route('/test',methods = ['GET'])
 def test_db_connection():
     documents = Document.query.all()
-    return jsonify([{"id":doc.id,"title":doc.title,"content":doc.content} for doc in documents])
+    return jsonify([{"id":doc.id,"title":doc.title,"content":doc.content,"file_path":doc.file_path} for doc in documents])
 
 @ingest_blueprint.route('/', methods = ['POST'])
 async def ingest_document():
     try:
+        print("in ingest documents")
+        print(request.files)
         if 'file' not in request.files:
             abort(400)
+        print(request)
         file = request.files['file']
+        print('file')
         # data = request.get_json()
         title = request.form.get('title')
         # content = data.get('content')
