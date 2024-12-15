@@ -10,21 +10,39 @@ from transformers import pipeline
 from sqlalchemy import func,text
 from pgvector.sqlalchemy import Vector
 import pandas as pd
+import numpy as np
+import pandas as pd
+from transformers import T5Tokenizer, T5ForConditionalGeneration
+import torch
+
 
 # ingest_blueprint = Blueprint('ingest',__name__)
 # app.register_blueprint(qa_blueprint,url_prefix = '/api/qa')
 
 qa_blueprint = Blueprint('qa',__name__)
 embedding_pipeline = pipeline("feature-extraction", model = 'sentence-transformers/all-MiniLM-L6-v2')
+# Load T5 tokenizer and model
+tokenizer = T5Tokenizer.from_pretrained("t5-small")
+model = T5ForConditionalGeneration.from_pretrained("t5-small")
 
-# from scipy.spatial.distance import cosine
 
 
-# # Cosine distance
-# cosine_distance = cosine(vec1, vec2)
+def generate_answer(question, context):
+    """
+    Generate an answer based on the question and retrieved context using T5.
+    """
+    # Create the input prompt for T5
+    prompt = f"question: {question} context: {context}"
 
-# print(f"Cosine Distance: {cosine_distance}")
+    # Tokenize the input
+    inputs = tokenizer.encode(prompt, return_tensors="pt", truncation=True, max_length=512)
 
+    # Generate the output
+    outputs = model.generate(inputs, max_length=50, num_beams=5, early_stopping=True)
+
+    # Decode the output
+    answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return answer
 
 
 
@@ -42,20 +60,6 @@ def find_similar_documents(Question, top_k=5):
     """
     Retrieve the top-k most similar documents using the db object.
     """
-    # Perform the query
-    # print(Question.embedding)
-    
-#     query = (
-#     db.session.query(
-#         Document.id,
-#         Document.title,
-#         Document.content,
-#         (Document.embeddings.op('<->')(Question.embedding)).label("similarity")
-#     )
-#     .order_by("similarity")  # Order by similarity (distance)
-#     .limit(top_k)  # Limit to top-k results
-# )
-
     query = (
         db.session.query(
             Document.id,
@@ -68,11 +72,10 @@ def find_similar_documents(Question, top_k=5):
     
     # Fetch results
     results = query.all()
-    # print(results)
     columns = ["id","title","content","embeddings"]
     df = pd.DataFrame(results)
     df.columns =columns
-    # print(df_documents)
+    
     
     print(type(df.at[0,'embeddings']),type(Question.embedding))
     # Stack embeddings into a numpy matrix
@@ -86,48 +89,38 @@ def find_similar_documents(Question, top_k=5):
     # Add to DataFrame and sort
     df["cosine_similarity"] = cosine_similarities
     sorted_df = df.sort_values(by="cosine_similarity", ascending=False)
-    print(sorted_df)
-    print(sorted_df.iloc[0])
+    print(sorted_df.head(5))
+    print(sorted_df.iloc[0]['content'])
+    content = sorted_df.iloc[0]['content']
+    return content
 
 
-    # Convert results to a list of dictionaries
-    return [
-        {"id": row.id, "name": row.title, "content": row.content}
-        for row in results
-    ]
 
 
 @qa_blueprint.route('/question', methods = ['POST','GET'])
 async def qa():
     data = request.json
-    question = data.get("question")
+    question_raw = data.get("question")
     
-    if not question:
+    if not question_raw:
         return jsonify({"error": "Question is required"}), 400
 
     # Run the RAG pipeline
     try:
-        question_embedding = await generate_embedding_async(question)
+        question_embedding = await generate_embedding_async(question_raw)
         question_embedding = flatten_with_numpy(question_embedding)[:1536]
 
-        question = Question(user_id = '84554',question_text=question,embedding=question_embedding)
+        question = Question(user_id = '84554',question_text=question_raw,embedding=question_embedding)
         try:
             db.session.add(question)
             db.session.commit()
         except Exception as e:
             print(e)
 
-        return find_similar_documents(question, top_k=5)
-        # documents = Document.query.all()
+        context =  find_similar_documents(question, top_k=5)
+        answer = generate_answer(question_raw, context)
         
-        # for row in documents:
-        #     Vector(row.embeddings).comparator_factory.cosine_distance(Vector(question.embedding))
-
-        
-        # return [
-        #     {"id": row.id, "name": row.title, "content": row.content}#documnets
-        #     for row in documents
-        # ]
+        return jsonify({"answer":answer})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
