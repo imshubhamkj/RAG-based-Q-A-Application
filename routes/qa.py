@@ -16,9 +16,6 @@ from transformers import T5Tokenizer, T5ForConditionalGeneration
 import torch
 
 
-# ingest_blueprint = Blueprint('ingest',__name__)
-# app.register_blueprint(qa_blueprint,url_prefix = '/api/qa')
-
 qa_blueprint = Blueprint('qa',__name__)
 embedding_pipeline = pipeline("feature-extraction", model = 'sentence-transformers/all-MiniLM-L6-v2')
 # Load T5 tokenizer and model
