@@ -96,8 +96,8 @@ def find_similar_documents(Question, top_k=5):
 
 @qa_blueprint.route('/question', methods = ['POST','GET'])
 async def qa():
-    data = request.json
-    question_raw = data.get("question")
+    # data = request.json
+    question_raw = request.form.get('question')
     
     if not question_raw:
         return jsonify({"error": "Question is required"}), 400

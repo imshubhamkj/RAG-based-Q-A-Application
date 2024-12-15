@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ask a Question</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        .error {
+            color: red;
+        }
+        .success {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ask a Question</h1>
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+    <form action="/api/qa/question" method="POST">
+        <label for="question">Enter your question:</label><br>
+        <textarea id="question" name="question" rows="4" cols="50" required>{{ request.form.get('question', '') }}</textarea><br><br>
+        <button type="submit">Submit</button>
+    </form>
+
+    {% if question and answer %}
+        <h2>Answer:</h2>
+        <p><strong>Question:</strong> {{ question }}</p>
+        <p><strong>Answer:</strong> {{ answer }}</p>
+    {% endif %}
+</body>
+</html>
