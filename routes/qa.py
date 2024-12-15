@@ -38,28 +38,61 @@ async def generate_embedding_async(content):
     return await loop.run_in_executor(None,embedding_pipeline,content)
 
 
-def find_similar_documents(question_embedding, top_k=5):
+def find_similar_documents(Question, top_k=5):
     """
     Retrieve the top-k most similar documents using the db object.
     """
     # Perform the query
+    # print(Question.embedding)
+    
+#     query = (
+#     db.session.query(
+#         Document.id,
+#         Document.title,
+#         Document.content,
+#         (Document.embeddings.op('<->')(Question.embedding)).label("similarity")
+#     )
+#     .order_by("similarity")  # Order by similarity (distance)
+#     .limit(top_k)  # Limit to top-k results
+# )
+
     query = (
-    db.session.query(
-        Document.id,
-        Document.title,
-        Document.content,
-        (Document.embeddings.op('<->')(question_embedding)).label("similarity")
+        db.session.query(
+            Document.id,
+            Document.title,
+            Document.content,
+            Document.embeddings,
+        )
+        .limit(top_k)  # Limit to top-k results
     )
-    .order_by("similarity")  # Order by similarity (distance)
-    .limit(top_k)  # Limit to top-k results
-)
     
     # Fetch results
     results = query.all()
+    # print(results)
+    columns = ["id","title","content","embeddings"]
+    df = pd.DataFrame(results)
+    df.columns =columns
+    # print(df_documents)
+    
+    print(type(df.at[0,'embeddings']),type(Question.embedding))
+    # Stack embeddings into a numpy matrix
+    document_embeddings = np.stack(df["embeddings"].values)
+
+    # Calculate cosine similarities
+    dot_products = np.dot(document_embeddings, Question.embedding)
+    norms = np.linalg.norm(document_embeddings, axis=1) * np.linalg.norm(Question.embedding)
+    cosine_similarities = dot_products / norms
+
+    # Add to DataFrame and sort
+    df["cosine_similarity"] = cosine_similarities
+    sorted_df = df.sort_values(by="cosine_similarity", ascending=False)
+    print(sorted_df)
+    print(sorted_df.iloc[0])
+
 
     # Convert results to a list of dictionaries
     return [
-        {"id": row.id, "name": row.name, "content": row.content, "similarity": row.similarity}
+        {"id": row.id, "name": row.title, "content": row.content}
         for row in results
     ]
 
